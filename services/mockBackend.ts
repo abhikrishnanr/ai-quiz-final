@@ -1,7 +1,6 @@
 import { AskAiState, QuizSession, QuizStatus, Team } from '../types';
 
 export const STORAGE_KEY = 'DUK_QUIZ_SESSION_V2';
-export const TEAM_SELECTION_KEY = 'duk_team_id';
 
 const DEFAULT_TEAMS: Team[] = Array.from({ length: 6 }, (_, index) => ({
   id: `t${index + 1}`,
@@ -139,7 +138,6 @@ export const QuizService = {
 
   purgeLocalState: async (): Promise<QuizSession> => {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(TEAM_SELECTION_KEY);
     return DEFAULT_SESSION;
   },
 };
