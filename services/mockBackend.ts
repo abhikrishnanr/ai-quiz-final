@@ -14,7 +14,7 @@ const DEFAULT_SESSION: QuizSession = {
     id: 'ask-ai-main',
     text: 'Ask AI Round: Ask a quiz-domain question to the AI host.',
     roundType: 'ASK_AI',
-    points: 200,
+    points: 20,
     timeLimit: 60,
   },
   status: QuizStatus.PREVIEW,
@@ -129,7 +129,7 @@ export const QuizService = {
 
     if (verdict === 'AI_WRONG' && session.activeTeamId) {
       const team = session.teams.find((item) => item.id === session.activeTeamId);
-      if (team) team.score += 200;
+      if (team) team.score += 20;
     }
 
     saveSession(session);
