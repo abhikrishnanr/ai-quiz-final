@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuizSync } from '../hooks/useQuizSync';
 import { API } from '../services/api';
+import { TEAM_SELECTION_KEY } from '../services/mockBackend';
 import { Badge, Button, Card } from '../components/SharedUI';
 import { BrainCircuit, Mic, Send, Square } from 'lucide-react';
 
 const TeamView: React.FC = () => {
   const { session, loading, refresh } = useQuizSync();
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(localStorage.getItem('duk_team_id'));
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(localStorage.getItem(TEAM_SELECTION_KEY));
   const [askAiText, setAskAiText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -15,13 +16,22 @@ const TeamView: React.FC = () => {
   const chunksRef = useRef<BlobPart[]>([]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '';
+    const params = new URLSearchParams(hashQuery || window.location.search);
     const teamFromUrl = params.get('team');
     if (teamFromUrl) {
       setSelectedTeam(teamFromUrl);
-      localStorage.setItem('duk_team_id', teamFromUrl);
+      localStorage.setItem(TEAM_SELECTION_KEY, teamFromUrl);
     }
   }, []);
+
+  useEffect(() => {
+    if (!selectedTeam || !session) return;
+    if (!session.teams.some((team) => team.id === selectedTeam)) {
+      setSelectedTeam(null);
+      localStorage.removeItem(TEAM_SELECTION_KEY);
+    }
+  }, [selectedTeam, session]);
 
   if (loading || !session) return null;
 
@@ -37,7 +47,7 @@ const TeamView: React.FC = () => {
               className="w-full p-4 rounded-xl bg-white/5 border border-white/10"
               onClick={() => {
                 setSelectedTeam(team.id);
-                localStorage.setItem('duk_team_id', team.id);
+                localStorage.setItem(TEAM_SELECTION_KEY, team.id);
               }}
             >
               {team.name}

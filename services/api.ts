@@ -5,8 +5,8 @@ import { QuizService } from './mockBackend';
 const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 const ai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
-const STORAGE_KEY_TTS = 'DUK_TTS_CACHE_GEMINI_V3';
-const STORAGE_KEY_TRANSCRIPTS = 'DUK_TRANSCRIPTS_CACHE_V1';
+export const STORAGE_KEY_TTS = 'DUK_TTS_CACHE_GEMINI_V3';
+export const STORAGE_KEY_TRANSCRIPTS = 'DUK_TRANSCRIPTS_CACHE_V1';
 
 const ELEVENLABS_BASE_URL = process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -59,6 +59,11 @@ export const API = {
   setActiveTeam: async (teamId: string): Promise<QuizSession> => QuizService.setActiveTeam(teamId),
   setAskAiState: async (state: AskAiState): Promise<QuizSession> => QuizService.setAskAiState(state),
   judgeAskAi: async (verdict: 'AI_CORRECT' | 'AI_WRONG'): Promise<QuizSession> => QuizService.judgeAskAi(verdict),
+  purgeLocalStorage: async (): Promise<QuizSession> => {
+    localStorage.removeItem(STORAGE_KEY_TTS);
+    localStorage.removeItem(STORAGE_KEY_TRANSCRIPTS);
+    return QuizService.purgeLocalState();
+  },
 
   getTTSAudio: async (text: string): Promise<string | undefined> => {
     if (!ELEVENLABS_API_KEY || !ELEVENLABS_VOICE_ID) return undefined;

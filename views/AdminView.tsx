@@ -3,7 +3,7 @@ import { useQuizSync } from '../hooks/useQuizSync';
 import { API } from '../services/api';
 import { QuizStatus } from '../types';
 import { Card, Badge, Button } from '../components/SharedUI';
-import { Activity, Copy, Mic, ThumbsDown, ThumbsUp, Users } from 'lucide-react';
+import { Activity, Copy, Mic, ThumbsDown, ThumbsUp, Trash2, Users } from 'lucide-react';
 
 const AdminView: React.FC = () => {
   const { session, loading, refresh } = useQuizSync();
@@ -40,7 +40,10 @@ const AdminView: React.FC = () => {
               <h1 className="text-3xl font-black uppercase">Ask AI Admin</h1>
               <p className="text-slate-400 mt-2">Use approve/reject to finalize each team round.</p>
             </div>
-            <Button onClick={() => run(API.resetSession)} variant="secondary">Reset Scores</Button>
+            <div className="flex gap-3">
+              <Button onClick={() => run(API.resetSession)} variant="secondary">Reset Scores</Button>
+              <Button onClick={() => run(API.purgeLocalStorage)} variant="danger"><Trash2 className="w-4 h-4" /> Purge LocalStorage</Button>
+            </div>
           </div>
         </Card>
 

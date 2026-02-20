@@ -9,8 +9,8 @@ export const COLORS = {
 };
 
 export const HOST_SCRIPTS = {
-  INTRO: "Digital University Ask AI Quiz is online. Welcome teams.",
-  ASK_AI_INTRO: "{team}, your mic is now enabled. Ask your quiz question.",
+  INTRO: "Welcome to Ask the AI round. You can ask questions to me in the following domains: science, technology, AI, mathematics, history, geography, current affairs, and general knowledge. So let's start.",
+  ASK_AI_INTRO: "{team} mic enabled. You can ask your quiz question now.",
 };
 
 export const APP_CONFIG = {
