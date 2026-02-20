@@ -15,6 +15,11 @@ const AdminView: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
 
+  const getSupportedAudioMimeType = () => {
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+    return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+  };
+
   const run = async (action: () => Promise<unknown>) => {
     setUpdating(true);
     try {
@@ -39,23 +44,46 @@ const AdminView: React.FC = () => {
 
     try {
       setMicError(null);
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('navigator.mediaDevices.getUserMedia is not available in this browser.');
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mimeType = getSupportedAudioMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       chunksRef.current = [];
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
 
+      recorder.onerror = (event) => {
+        console.error('Mic recording error:', event);
+        setMicError('Microphone recording failed. Please try again or type your question.');
+        setIsListening(false);
+      };
+
       recorder.onstop = async () => {
         try {
-          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          const blobType = recorder.mimeType || mimeType || 'audio/webm';
+          const blob = new Blob(chunksRef.current, { type: blobType });
+
+          if (!blob.size) {
+            console.error('Mic recording stopped with empty audio blob.', { blobType, chunks: chunksRef.current.length });
+            setMicError('No audio was captured. Please try recording again.');
+            return;
+          }
+
           const transcript = await API.transcribeMicAudio(blob);
           if (transcript) {
             setAskAiText(transcript);
           } else {
+            console.error('Voice transcription returned no text.', { blobType, size: blob.size });
             setMicError('Could not convert voice to text. Please type your question.');
           }
+        } catch (error) {
+          console.error('Failed while processing mic recording:', error);
+          setMicError('Could not process recorded audio. Please try again or type your question.');
         } finally {
           stream.getTracks().forEach((track) => track.stop());
         }
@@ -64,7 +92,8 @@ const AdminView: React.FC = () => {
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsListening(true);
-    } catch {
+    } catch (error) {
+      console.error('Microphone access failed:', error);
       setMicError('Microphone access failed. Please allow mic permission or type manually.');
       setIsListening(false);
     }
