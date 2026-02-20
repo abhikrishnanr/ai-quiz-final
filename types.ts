@@ -1,4 +1,3 @@
-
 export enum QuizStatus {
   PREVIEW = 'PREVIEW',
   LIVE = 'LIVE',
@@ -6,39 +5,21 @@ export enum QuizStatus {
   REVEALED = 'REVEALED'
 }
 
-export type RoundType = 'BUZZER' | 'STANDARD' | 'ASK_AI' | 'VISUAL';
-export type SubmissionType = 'ANSWER' | 'PASS';
-export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
-export type AskAiState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'ANSWERING' | 'JUDGING' | 'COMPLETED';
+export type RoundType = 'ASK_AI';
+export type AskAiState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'ANSWERING' | 'COMPLETED';
 
 export interface Question {
   id: string;
   text: string;
-  options: string[];
-  correctAnswer: number;
-  explanation: string;
+  roundType: RoundType;
   points: number;
   timeLimit: number;
-  roundType: RoundType;
-  difficulty: Difficulty;
-  hint: string;
-  visualUri?: string; // For image-based rounds
 }
 
 export interface Team {
   id: string;
   name: string;
   score: number;
-  lastActive?: number;
-}
-
-export interface Submission {
-  teamId: string;
-  questionId: string;
-  answer?: number;
-  type: SubmissionType;
-  timestamp: number;
-  isCorrect?: boolean;
 }
 
 export interface QuizSession {
@@ -48,16 +29,7 @@ export interface QuizSession {
   startTime?: number;
   turnStartTime?: number;
   activeTeamId: string | null;
-  passedTeamIds: string[];
-  requestedHint: boolean;
-  hintVisible: boolean;
-  explanationVisible: boolean;
-  nextRoundType: RoundType;
   teams: Team[];
-  submissions: Submission[];
-  isReading?: boolean;
-  
-  // Ask The AI Round Specifics
   askAiState: AskAiState;
   currentAskAiQuestion?: string;
   currentAskAiResponse?: string;
