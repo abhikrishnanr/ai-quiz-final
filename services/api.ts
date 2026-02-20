@@ -2,17 +2,22 @@ import { GoogleGenAI } from '@google/genai';
 import { AskAiState, QuizSession, QuizStatus } from '../types';
 import { QuizService } from './mockBackend';
 
-const geminiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+const env = (import.meta as any).env || {};
+const readEnv = (key: string): string | undefined => env[key] || (typeof process !== 'undefined' ? (process as any).env?.[key] : undefined);
+
+const geminiKey = readEnv('VITE_GEMINI_API_KEY') || readEnv('GEMINI_API_KEY') || readEnv('VITE_API_KEY') || readEnv('API_KEY');
 const ai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
+
+const GEMINI_MODEL = readEnv('VITE_GEMINI_MODEL') || readEnv('GEMINI_MODEL') || 'gemini-1.5-flash';
 
 export const STORAGE_KEY_TTS = 'DUK_TTS_CACHE_GEMINI_V3';
 export const STORAGE_KEY_TRANSCRIPTS = 'DUK_TRANSCRIPTS_CACHE_V1';
 
-const ELEVENLABS_BASE_URL = process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
-const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_flash_v2_5';
-const ELEVENLABS_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || 'mp3_44100_128';
+const ELEVENLABS_BASE_URL = readEnv('VITE_ELEVENLABS_BASE_URL') || readEnv('ELEVENLABS_BASE_URL') || 'https://api.elevenlabs.io';
+const ELEVENLABS_API_KEY = readEnv('VITE_ELEVENLABS_API_KEY') || readEnv('ELEVENLABS_API_KEY');
+const ELEVENLABS_VOICE_ID = readEnv('VITE_ELEVENLABS_VOICE_ID') || readEnv('ELEVENLABS_VOICE_ID');
+const ELEVENLABS_MODEL_ID = readEnv('VITE_ELEVENLABS_MODEL_ID') || readEnv('ELEVENLABS_MODEL_ID') || 'eleven_flash_v2_5';
+const ELEVENLABS_OUTPUT_FORMAT = readEnv('VITE_ELEVENLABS_OUTPUT_FORMAT') || readEnv('ELEVENLABS_OUTPUT_FORMAT') || 'mp3_44100_128';
 
 const getPersistentCache = (): Record<string, string> => {
   try {
@@ -109,12 +114,12 @@ export const API = {
       if (transcriptCache[cacheKey]) return transcriptCache[cacheKey];
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL,
         contents: [
           {
             role: 'user',
             parts: [
-              { text: 'Transcribe this short quiz question audio accurately in plain English only.' },
+              { text: 'Transcribe this short quiz question audio accurately in plain English only. Return only the transcript text.' },
               { inlineData: { mimeType: audioBlob.type || 'audio/webm', data: base64Audio } },
             ],
           },
@@ -125,7 +130,8 @@ export const API = {
       if (!text) return undefined;
       saveTranscriptCache(cacheKey, text);
       return text;
-    } catch {
+    } catch (error) {
+      console.error('Gemini transcription failed:', error);
       return undefined;
     }
   },
@@ -139,17 +145,16 @@ export const API = {
   generateAskAiResponse: async (userQuestion: string): Promise<QuizSession> => {
     if (!ai) {
       return QuizService.setAskAiState('ANSWERING', {
-        response: 'AI key is not configured. Please set GEMINI_API_KEY.',
+        response: 'AI key is not configured. Please set VITE_GEMINI_API_KEY.',
         links: [],
       });
     }
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL,
         contents: `User question: "${userQuestion}"`,
         config: {
-          tools: [{ googleSearch: {} }],
           systemInstruction: `You are an AI quiz host.
 First classify if question is in quiz domains: science, technology, AI, mathematics, history, geography, current affairs, or general knowledge.
 If outside domain, reply exactly: "This question is outside quiz domains. Ask a quiz-domain question."
@@ -164,7 +169,8 @@ Keep tone concise and suitable for an on-stage quiz.`,
         .map((chunk: any) => ({ title: chunk.web.title, uri: chunk.web.uri }));
 
       return QuizService.setAskAiState('ANSWERING', { response: aiText, links });
-    } catch {
+    } catch (error) {
+      console.error('Gemini answer generation failed:', error);
       return QuizService.setAskAiState('ANSWERING', {
         response: 'I am having trouble connecting. Please ask again.',
         links: [],
