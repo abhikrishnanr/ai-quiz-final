@@ -3,7 +3,7 @@ import { useQuizSync } from '../hooks/useQuizSync';
 import { API } from '../services/api';
 import { QuizStatus } from '../types';
 import { Card, Badge, Button } from '../components/SharedUI';
-import { Activity, Mic, ThumbsDown, ThumbsUp, Users } from 'lucide-react';
+import { Activity, Copy, Mic, ThumbsDown, ThumbsUp, Users } from 'lucide-react';
 
 const AdminView: React.FC = () => {
   const { session, loading, refresh } = useQuizSync();
@@ -19,6 +19,14 @@ const AdminView: React.FC = () => {
     }
   };
 
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // no-op
+    }
+  };
+
   if (loading || !session) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Activity className="animate-spin text-indigo-400" /></div>;
   }
@@ -30,7 +38,7 @@ const AdminView: React.FC = () => {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-black uppercase">Ask AI Admin</h1>
-              <p className="text-slate-400 mt-2">Only ASK AI round is enabled.</p>
+              <p className="text-slate-400 mt-2">Use approve/reject to finalize each team round.</p>
             </div>
             <Button onClick={() => run(API.resetSession)} variant="secondary">Reset Scores</Button>
           </div>
@@ -44,6 +52,24 @@ const AdminView: React.FC = () => {
               <div className="text-xs uppercase text-slate-500">State</div>
               <div className="font-bold mt-1">{session.askAiState}</div>
             </div>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 className="font-black uppercase mb-4">Team Ask URLs</h2>
+          <div className="grid md:grid-cols-2 gap-3">
+            {session.teams.map((team) => {
+              const teamUrl = `${window.location.origin}${window.location.pathname}#/team?team=${team.id}`;
+              return (
+                <div key={team.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="font-bold">{team.name}</p>
+                  <p className="text-xs text-slate-400 break-all mt-1">{teamUrl}</p>
+                  <Button variant="secondary" className="mt-3" onClick={() => copyText(teamUrl)}>
+                    <Copy className="w-4 h-4" /> Copy URL
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </Card>
 
@@ -84,8 +110,8 @@ const AdminView: React.FC = () => {
             <div><span className="text-xs uppercase text-slate-500">AI Response</span><p>{session.currentAskAiResponse || 'No answer yet.'}</p></div>
             {session.askAiState === 'ANSWERING' && (
               <div className="flex gap-3 pt-2">
-                <Button onClick={() => run(() => API.judgeAskAi('AI_CORRECT'))} variant="success" className="flex-1"><ThumbsUp className="w-4 h-4" /> AI Correct</Button>
-                <Button onClick={() => run(() => API.judgeAskAi('AI_WRONG'))} variant="danger" className="flex-1"><ThumbsDown className="w-4 h-4" /> AI Wrong (+200)</Button>
+                <Button onClick={() => run(() => API.judgeAskAi('AI_CORRECT'))} variant="success" className="flex-1"><ThumbsUp className="w-4 h-4" /> Approve AI Reply</Button>
+                <Button onClick={() => run(() => API.judgeAskAi('AI_WRONG'))} variant="danger" className="flex-1"><ThumbsDown className="w-4 h-4" /> Reject AI Reply (+20 Team)</Button>
               </div>
             )}
             {session.askAiVerdict && <Badge color={session.askAiVerdict === 'AI_WRONG' ? 'red' : 'green'}>{session.askAiVerdict}</Badge>}

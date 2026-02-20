@@ -3,31 +3,9 @@ import { useQuizSync } from '../hooks/useQuizSync';
 import { API } from '../services/api';
 import { SFX } from '../services/sfx';
 import { Badge, Card } from '../components/SharedUI';
-import { Activity, Mic, Power, Volume2 } from 'lucide-react';
+import { Activity, ExternalLink, Mic, Power, Volume2 } from 'lucide-react';
 import { AIHostAvatar } from '../components/AIHostAvatar';
 import { HOST_SCRIPTS } from '../constants';
-
-function decodeBase64(base64: string) {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i += 1) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length;
-  const buffer = ctx.createBuffer(1, frameCount, 24000);
-  const channelData = buffer.getChannelData(0);
-
-  for (let i = 0; i < frameCount; i += 1) {
-    channelData[i] = dataInt16[i] / 32768.0;
-  }
-
-  return buffer;
-}
 
 const DisplayView: React.FC = () => {
   const { session, loading } = useQuizSync();
@@ -35,63 +13,46 @@ const DisplayView: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [commentary, setCommentary] = useState('');
   const [askedQuestions, setAskedQuestions] = useState<string[]>([]);
+  const [overlayText, setOverlayText] = useState('');
 
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAskAiStateRef = useRef<string | null>(null);
   const lastQuestionRef = useRef<string | null>(null);
 
   const activeTeam = session?.teams.find((team) => team.id === session.activeTeamId);
 
-  const initAudio = async () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
-    }
-
-    SFX.init();
-    SFX.playIntro();
-    setAudioInitialized(true);
-
-    const introAudio = await API.getTTSAudio(HOST_SCRIPTS.INTRO);
-    if (introAudio) {
-      setTimeout(() => {
-        void playAudio(introAudio, HOST_SCRIPTS.INTRO);
-      }, 300);
-    }
-  };
-
-  const playAudio = async (base64Data: string, text: string) => {
-    if (!audioContextRef.current) return;
-
-    if (activeSourceRef.current) {
-      try {
-        activeSourceRef.current.stop();
-      } catch {
-        // no-op
-      }
-    }
-
+  const speakText = async (text: string) => {
+    if (!audioInitialized || !text.trim()) return;
     setCommentary(text);
-    setIsSpeaking(true);
+    const audioSrc = await API.getTTSAudio(text);
+    if (!audioSrc) return;
 
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current.currentTime = 0;
+    }
+
+    const audio = new Audio(audioSrc);
+    activeAudioRef.current = audio;
+    setIsSpeaking(true);
+    audio.onended = () => {
+      setIsSpeaking(false);
+      activeAudioRef.current = null;
+    };
     try {
-      const audioBuffer = await decodeAudioData(decodeBase64(base64Data), audioContextRef.current);
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      source.onended = () => {
-        setIsSpeaking(false);
-        activeSourceRef.current = null;
-      };
-      activeSourceRef.current = source;
-      source.start();
+      await audio.play();
     } catch {
       setIsSpeaking(false);
     }
+  };
+
+  const initAudio = async () => {
+    SFX.init();
+    SFX.playIntro();
+    setAudioInitialized(true);
+    setTimeout(() => {
+      void speakText(HOST_SCRIPTS.INTRO);
+    }, 300);
   };
 
   useEffect(() => {
@@ -99,36 +60,31 @@ const DisplayView: React.FC = () => {
 
     if (session.askAiState !== lastAskAiStateRef.current) {
       if (session.askAiState === 'LISTENING' && activeTeam) {
-        const text = HOST_SCRIPTS.ASK_AI_INTRO.replace('{team}', activeTeam.name);
-        API.getTTSAudio(text).then((audio) => {
-          if (audio) void playAudio(audio, text);
-        });
+        void speakText(`${activeTeam.name}, your mic is enabled now. Please ask your quiz question.`);
       }
 
       if (session.askAiState === 'PROCESSING') {
-        const text = `${activeTeam?.name || 'Selected team'}, question received. Processing now.`;
-        API.getTTSAudio(text).then((audio) => {
-          if (audio) void playAudio(audio, text);
-        });
+        void speakText(`${activeTeam?.name || 'Team'} has responded with the question. Processing with Gemini now.`);
       }
 
       if (session.askAiState === 'ANSWERING' && session.currentAskAiResponse) {
-        API.getTTSAudio(session.currentAskAiResponse).then((audio) => {
-          if (audio) {
-            void playAudio(audio, session.currentAskAiResponse || '');
-          }
-        });
+        const isOutOfScope = session.currentAskAiResponse.includes('outside quiz domains');
+        if (isOutOfScope) {
+          void speakText('The domain is out of scope. Please ask from the quiz domains only.');
+        } else {
+          void speakText(session.currentAskAiResponse);
+        }
       }
 
       if (session.askAiState === 'COMPLETED') {
         const isWrong = session.askAiVerdict === 'AI_WRONG';
         const verdictText = isWrong
-          ? `My answer was wrong. ${activeTeam?.name || 'Team'} gets 200 points.`
-          : 'My answer was correct. No points awarded this turn.';
+          ? `AI fails. ${activeTeam?.name || 'Team'} wins against AI and gets 20 points.`
+          : `AI wins this turn. ${activeTeam?.name || 'Team'} gets zero points.`;
+        setOverlayText(isWrong ? `${activeTeam?.name || 'Team'} +20 | AI Failed` : 'AI WINS THIS TURN');
+        setTimeout(() => setOverlayText(''), 2800);
         if (isWrong) SFX.playWrong(); else SFX.playCorrect();
-        API.getTTSAudio(verdictText).then((audio) => {
-          if (audio) void playAudio(audio, verdictText);
-        });
+        void speakText(verdictText);
       }
 
       lastAskAiStateRef.current = session.askAiState;
@@ -154,13 +110,22 @@ const DisplayView: React.FC = () => {
           <Power className="w-10 h-10 text-indigo-400 animate-pulse" />
         </div>
         <h1 className="text-4xl font-black text-white uppercase tracking-[0.2em]">Start Display Audio</h1>
-        <p className="text-slate-500 mt-4 uppercase tracking-widest text-xs">Tap once to initialize avatar voice</p>
+        <p className="text-slate-500 mt-4 uppercase tracking-widest text-xs">Tap once to initialize ElevenLabs voice</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white p-8">
+    <div className="min-h-screen bg-[#020617] text-white p-8 relative">
+      {overlayText && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="rounded-3xl border border-emerald-400/50 bg-emerald-500/10 px-10 py-8 text-center shadow-[0_0_40px_rgba(16,185,129,0.35)]">
+            <p className="text-sm uppercase tracking-[0.35em] text-emerald-300">Result Announcement</p>
+            <p className="text-4xl font-black mt-3">{overlayText}</p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 flex flex-col items-center justify-start gap-5">
           <Card className="w-full flex flex-col items-center">
@@ -213,14 +178,27 @@ const DisplayView: React.FC = () => {
             </div>
           </Card>
 
-          <Card>
-            <p className="text-xs uppercase text-slate-500">Question Asked</p>
-            <p className="text-2xl mt-2">{session.currentAskAiQuestion || 'Waiting for question...'}</p>
+          <Card className="border-indigo-400/40 ring-2 ring-indigo-500/30 shadow-[0_0_45px_rgba(99,102,241,0.2)]">
+            <p className="text-xs uppercase text-indigo-300 tracking-[0.25em]">Question Asked</p>
+            <p className="text-3xl mt-3 font-extrabold text-indigo-50">{session.currentAskAiQuestion || 'Waiting for question...'}</p>
+          </Card>
+
+          <Card className="border-emerald-400/40 ring-2 ring-emerald-500/30 shadow-[0_0_45px_rgba(16,185,129,0.2)]">
+            <p className="text-xs uppercase text-emerald-300 tracking-[0.25em] flex items-center gap-2"><Volume2 className="w-4 h-4" /> AI Answer</p>
+            <p className="text-3xl mt-3 font-extrabold text-emerald-50">{session.currentAskAiResponse || 'Waiting for AI response...'}</p>
           </Card>
 
           <Card>
-            <p className="text-xs uppercase text-slate-500 flex items-center gap-2"><Volume2 className="w-4 h-4" /> AI Answer</p>
-            <p className="text-2xl mt-2">{session.currentAskAiResponse || 'Waiting for AI response...'}</p>
+            <h2 className="font-black uppercase mb-3">Source URLs</h2>
+            <div className="space-y-2">
+              {(session.groundingUrls || []).length === 0 && <p className="text-slate-400">No source URLs for this response.</p>}
+              {(session.groundingUrls || []).map((link, index) => (
+                <a key={`${link.uri}-${index}`} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3 hover:bg-white/10">
+                  <span className="truncate">{link.title || link.uri}</span>
+                  <ExternalLink className="w-4 h-4 text-indigo-300" />
+                </a>
+              ))}
+            </div>
           </Card>
 
           <Card>

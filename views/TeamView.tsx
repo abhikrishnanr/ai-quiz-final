@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useQuizSync } from '../hooks/useQuizSync';
 import { API } from '../services/api';
 import { Badge, Button, Card } from '../components/SharedUI';
-import { BrainCircuit, Mic, Send } from 'lucide-react';
+import { BrainCircuit, Mic, Send, Square } from 'lucide-react';
 
 const TeamView: React.FC = () => {
   const { session, loading, refresh } = useQuizSync();
@@ -10,21 +10,17 @@ const TeamView: React.FC = () => {
   const [askAiText, setAskAiText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const [micError, setMicError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
 
   useEffect(() => {
-    if (!('webkitSpeechRecognition' in window)) return;
-    const recognition = new (window as any).webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-    recognition.onresult = (event: any) => {
-      setAskAiText(event.results[0][0].transcript);
-      setIsListening(false);
-    };
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-    recognitionRef.current = recognition;
+    const params = new URLSearchParams(window.location.search);
+    const teamFromUrl = params.get('team');
+    if (teamFromUrl) {
+      setSelectedTeam(teamFromUrl);
+      localStorage.setItem('duk_team_id', teamFromUrl);
+    }
   }, []);
 
   if (loading || !session) return null;
@@ -56,16 +52,55 @@ const TeamView: React.FC = () => {
   const isMyTurn = session.activeTeamId === selectedTeam;
   const micEnabled = session.askAiState === 'LISTENING' && isMyTurn;
 
-  const toggleListening = () => {
-    if (!recognitionRef.current || !micEnabled) return;
+  const toggleListening = async () => {
+    if (!micEnabled) return;
+
     if (isListening) {
-      recognitionRef.current.stop();
+      mediaRecorderRef.current?.stop();
       setIsListening(false);
-    } else {
-      recognitionRef.current.start();
+      return;
+    }
+
+    try {
+      setMicError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        try {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          const transcript = await API.transcribeMicAudio(blob);
+          if (transcript) {
+            setAskAiText(transcript);
+          } else {
+            setMicError('Could not convert voice to text. Please type your question.');
+          }
+        } finally {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
       setIsListening(true);
+    } catch {
+      setMicError('Microphone access failed. Please allow mic permission or type manually.');
+      setIsListening(false);
     }
   };
+
+  useEffect(() => {
+    if (micEnabled) return;
+    if (isListening) {
+      mediaRecorderRef.current?.stop();
+      setIsListening(false);
+    }
+  }, [micEnabled, isListening]);
 
   const submitAskAi = async () => {
     if (!askAiText.trim() || !micEnabled) return;
@@ -95,9 +130,10 @@ const TeamView: React.FC = () => {
           <p className="text-2xl mt-2">{micEnabled ? 'Enabled by admin' : 'Disabled (wait for admin to select your team)'}</p>
           <div className="mt-4 flex gap-3">
             <Button onClick={toggleListening} variant="primary" disabled={!micEnabled} className="flex-1">
-              <Mic className="w-4 h-4" /> {isListening ? 'Stop Listening' : 'Speak Question'}
+              {isListening ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />} {isListening ? 'Stop Recording' : 'Record Question'}
             </Button>
           </div>
+          {micError && <p className="text-rose-300 mt-3 text-sm">{micError}</p>}
         </Card>
 
         <Card>
