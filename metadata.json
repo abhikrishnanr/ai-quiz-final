@@ -1,0 +1,8 @@
+{
+  "name": "Digital University AI Quiz Platform",
+  "description": "A production-grade, real-time AI-led competitive quiz system for academic and institutional events, featuring Admin, Display, and Team modes.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
