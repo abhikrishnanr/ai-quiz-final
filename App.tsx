@@ -3,8 +3,7 @@ import React from 'react';
 import { HashRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import AdminView from './views/AdminView';
 import DisplayView from './views/DisplayView';
-import TeamView from './views/TeamView';
-import { BrainCircuit, Settings, Monitor, Users, ChevronRight, Zap, QrCode } from 'lucide-react';
+import { BrainCircuit, Settings, Monitor, ChevronRight, Zap, QrCode } from 'lucide-react';
 
 const Home: React.FC = () => (
   <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-indigo-500 selection:text-white">
@@ -29,11 +28,10 @@ const Home: React.FC = () => (
         Next-generation competitive intelligence platform driven by real-time neural processing and Gemini vision.
       </p>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full px-4 md:px-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full px-4 md:px-0 max-w-4xl">
         {[
           { to: "/admin", icon: Settings, label: "Admin Core", desc: "System Control", color: "from-slate-800 to-slate-900" },
-          { to: "/display", icon: Monitor, label: "Display Node", desc: "Audience View", color: "from-indigo-900 to-slate-900" },
-          { to: "/team", icon: Users, label: "Team Uplink", desc: "Participant Interface", color: "from-cyan-900 to-slate-900" }
+          { to: "/display", icon: Monitor, label: "Display Node", desc: "Audience View", color: "from-indigo-900 to-slate-900" }
         ].map((item, idx) => (
           <Link 
             key={idx}
@@ -86,7 +84,6 @@ const App: React.FC = () => {
         <Route path="/" element={<Home />} />
         <Route path="/admin" element={<AdminView />} />
         <Route path="/display" element={<DisplayView />} />
-        <Route path="/team" element={<TeamView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
