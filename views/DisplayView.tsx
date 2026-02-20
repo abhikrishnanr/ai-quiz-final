@@ -60,7 +60,7 @@ const DisplayView: React.FC = () => {
 
     if (session.askAiState !== lastAskAiStateRef.current) {
       if (session.askAiState === 'LISTENING' && activeTeam) {
-        void speakText(`${activeTeam.name}, your mic is enabled now. Please ask your quiz question.`);
+        void speakText(HOST_SCRIPTS.ASK_AI_INTRO.replace('{team}', activeTeam.name));
       }
 
       if (session.askAiState === 'PROCESSING') {
